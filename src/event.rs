@@ -1,44 +1,90 @@
-use chrono::{DateTime, Utc};
-use google_calendar3::api::Event;
+use chrono::{DateTime, Local, Utc};
+use google_calendar3::api::{CalendarListEntry, Event};
+
+//TODO make sure to add assertions that the events match calendar id
+#[derive(Debug, Clone)]
+pub struct GcalCalendar {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub events: Vec<CalendarEvent>,
+    pub access: AccessRole,
+    pub sync_enabled: bool,
+    pub etag: Option<String>,
+    pub last_sync_time: DateTime<Utc>,
+}
+
+impl GcalCalendar {
+    pub fn from_calendar_list_entry(entry: CalendarListEntry) -> Result<Self, ()> {
+        let id = entry.id.expect("Calendar ID not provided");
+        let name = entry.summary.expect("Calendar name not provided");
+        let description = entry.description;
+        let events: Vec<CalendarEvent> = Vec::new();
+        let access = match entry.access_role.expect("Calendar Access Role not provided").as_str() {
+            "freeBusyReader" => {Some(AccessRole::FreeBusyReader)},
+            "reader" => {Some(AccessRole::Reader)},
+            "writer" => {Some(AccessRole::Writer)},
+            "owner" => {Some(AccessRole::Owner)},
+            _ => {None}
+        }.expect("Invalid Access Role");
+        let sync_enabled = true;
+        let etag = entry.etag;
+        let last_sync_time = Local::now().to_utc(); // TODO Still yet to sync, how to resolve?
+        Ok(Self {
+            id,
+            name,
+            description,
+            events,
+            access,
+            sync_enabled,
+            etag,
+            last_sync_time
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccessRole {
+    Owner,
+    Writer,
+    Reader,
+    FreeBusyReader,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SourceType {
+    GoogleCalendar,
+}
 
 /// CalendarEvent is designed for events rendering via the TUI
-pub trait CalendarEvent {
-    fn get_title(&self) -> String;
-    fn get_description(&self) -> Option<String>;
-    fn get_location(&self) -> Option<String>;
-    fn get_start_time(&self) -> DateTime<Utc>;
-    fn get_end_time(&self) -> DateTime<Utc>;
-    fn set_title(&mut self, title: String);
-    fn set_description(&mut self, description: String);
-    fn set_location(&mut self, location: String);
-    fn set_start_time(&mut self, start_time: DateTime<Utc>);
-    fn set_end_time(&mut self, end_time: DateTime<Utc>);
+// TODO we should change it so that its just get_render_event if above is the case, since we can
+// just make these field public if necessary. at the end of the day, all of the events need to be
+// gcal events i think so idk if this matters at all.
+
+#[derive(Debug, Clone)]
+pub struct CalendarEvent {
+    pub title: String,
+    pub description: Option<String>,
+    pub location: Option<String>,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub etag: String,
+    pub event_id: String,
+    pub calendar_id: String,
+    pub source_type: SourceType,
+    pub updated: bool, // Updated locally since last sync
 }
 
-pub enum CalendarEvents {
-    Gcal(GcalEvent)
-}
-
-pub struct GcalEvent {
-    title: String,
-    description: Option<String>,
-    location: Option<String>,
-    start_time: DateTime<Utc>,
-    end_time: DateTime<Utc>,
-    etag: String,
-    id: String,
-    updated: bool, // Updated locally since last sync
-}
-
-impl GcalEvent {
-    pub fn new(event: Event) -> Result<Self, ()> {
+impl CalendarEvent {
+    pub fn from_gcal_api(event: Event, calendar_id: String) -> Result<Self, ()> {
         let title = event.summary.expect("No title provided");
         let description = event.description;
         let location = event.location;
         let start_time = event.start.expect("No start time provided").date_time.expect("Unable to convert given start time");
         let end_time = event.end.expect("No end time provided").date_time.expect("Unable to convert given end time");
         let etag = event.etag.expect("No etag provided");
-        let id = event.id.expect("No id provided");
+        let event_id = event.id.expect("No id provided");
+        let source_type = SourceType::GoogleCalendar;
         let updated = false;
 
         Ok(Self {
@@ -48,7 +94,9 @@ impl GcalEvent {
             start_time,
             end_time,
             etag,
-            id,
+            event_id,
+            calendar_id,
+            source_type,
             updated,
         })
     }
@@ -56,57 +104,6 @@ impl GcalEvent {
     pub fn update(event: Event) {
         todo!()
     }
-    
-    //TODO make it so that updated is set to false after syncing
 
-    pub fn get_etag(&self) -> String {
-        self.etag.clone()
-    }
-}
-
-impl CalendarEvent for GcalEvent {
-    fn get_title(&self) -> String {
-        self.title.clone()
-    }
-
-    fn get_description(&self) -> Option<String> {
-        self.description.clone()
-    }
-
-    fn get_location(&self) -> Option<String> {
-        self.location.clone()
-    }
-
-    fn get_start_time(&self) -> DateTime<Utc> {
-        self.start_time
-    }
-
-    fn get_end_time(&self) -> DateTime<Utc> {
-        self.end_time
-    }
-
-    fn set_title(&mut self, title: String) {
-        self.title = title;
-        self.updated = true;
-    }
-
-    fn set_description(&mut self, description: String) {
-        self.description = Some(description);
-        self.updated = true;
-    }
-    
-    fn set_location(&mut self, location: String) {
-        self.location = Some(location);
-        self.updated = true;
-    }
-
-    fn set_start_time(&mut self, start_time: DateTime<Utc>) {
-        self.start_time = start_time;
-        self.updated = true;
-    }
-
-    fn set_end_time(&mut self, end_time: DateTime<Utc>) {
-        self.end_time = end_time;
-        self.updated = true;
-    }
+    //TODO make it so that updated is set to false after syncing and set to true after changing
 }

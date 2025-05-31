@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rusqlite::{Connection, Error};
 
-use crate::event::CalendarEvents;
+use crate::{google_calendar_api::GoogleCalendarAPI};
 
 pub struct Database {
     db: Connection
@@ -13,30 +13,20 @@ pub struct Database {
 impl Database {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let db = Connection::open(path)?;
-        db.execute_batch(
-            "BEGIN;
-CREATE TABLE events(
-id TEXT PRIMARY KEY,
-title TEXT,
-description TEXT,
-location TEXT,
-start TEXT,
-end TEXT,
-etag TEXT,
-updated BOOLEAN
-);
-COMMIT;"
-        );
+
+        // STEP 1: Configure database settings (individual execute calls)
+        db.execute("PRAGMA foreign_keys = ON", [])?;           // Data integrity
+        db.execute("PRAGMA journal_mode = WAL", [])?;          // Can't change in transaction!
+        db.execute("PRAGMA synchronous = NORMAL", [])?;        // Speed/safety balance
+        db.execute("PRAGMA cache_size = -64000", [])?;         // 64MB cache
+        db.execute("PRAGMA temp_store = MEMORY", [])?;         // Fast temp operations
+        db.execute_batch(include_str!("../sql/schema.sql"))?;
         Ok(Self {
             db
         })
     }
 
-    fn add_event(event: CalendarEvents) {
-        match event {
-            CalendarEvents::Gcal(gcal_event) => {
-                
-            },
-        }
+    fn sync_gcal(&mut self, gcal_api: GoogleCalendarAPI) {
+        
     }
 }

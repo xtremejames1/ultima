@@ -12,10 +12,6 @@ async fn main() -> Result<(), Error> {
     rustls::crypto::aws_lc_rs::default_provider().install_default().unwrap();
     // TUI:
     let gcal = GoogleCalendarAPI::new().await.unwrap();
-    let result = gcal.get_event_names();
-    for title in result.await.unwrap() {
-        print!("{}, ", title);
-    }
 
     Ok(())
     // let mut terminal = ratatui::init();

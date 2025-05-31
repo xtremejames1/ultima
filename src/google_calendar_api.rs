@@ -51,7 +51,13 @@ impl GoogleCalendarAPI {
     }
 
     pub async fn get_calendars(&mut self) -> Result<Vec<GcalCalendar>, ()> {
-        let result = self.hub.calendar_list().list().doit().await;
+        let result = if let Some(token) = &self.sync_token {
+            self.hub.calendar_list().list().sync_token(token.as_str()).doit().await
+        }
+        else {
+            self.hub.calendar_list().list().doit().await
+        };
+
         let mut calendars = Vec::new();
         let (_, mut calendar_list) = result.expect("Invalid calendar list");
         let mut page_token = calendar_list.next_page_token;
@@ -59,11 +65,14 @@ impl GoogleCalendarAPI {
             calendars.push(GcalCalendar::from_calendar_list_entry(entry).expect("Unable to convert calendar into GcalCalendar struct"));
         }
 
-        while page_token.is_some() {
-            let result = self.hub.calendar_list()
-                .list()
-                .page_token(page_token.as_ref().unwrap().as_str())
-                .doit().await;
+        while let Some(page_token_str) = page_token { 
+            let result = if let Some(token) = &self.sync_token {
+                self.hub.calendar_list().list().sync_token(token.as_str()).page_token(&page_token_str).doit().await
+            }
+            else {
+                self.hub.calendar_list().list().page_token(&page_token_str).doit().await
+            };
+
             (_, calendar_list) = result.expect("Invalid calendar list");
             page_token = calendar_list.next_page_token;
             for entry in calendar_list.items.expect("Invalid calendar list items") {
@@ -71,52 +80,40 @@ impl GoogleCalendarAPI {
             }
         }
         self.sync_token = calendar_list.next_sync_token;
-        //TODO get sync token
         Ok(calendars)
     }
 
-    pub async fn get_events(&self, calendar: GcalCalendar) -> Result<Vec<CalendarEvent>, ()> {
-        let calendar_id = calendar.id;
-        let result = self.hub.events().list(&calendar_id.clone().as_str()).doit().await;
+    pub async fn get_events(&mut self, calendar: GcalCalendar) -> Result<Vec<CalendarEvent>, ()> {
+        let calendar_id = calendar.id.as_str();
+        let result = if let Some(token) = &self.sync_token {
+            self.hub.events().list(&calendar_id.clone()).sync_token(token.as_str()).doit().await
+        }
+        else {
+            self.hub.events().list(&calendar_id.clone()).doit().await
+        };
         let mut events = Vec::new();
-        let (_, event_list) = result.expect("Invalid event list");
+        let (_, mut event_list) = result.expect("Invalid event list");
         let mut page_token = event_list.next_page_token;
         for entry in event_list.items.expect("Invalid event list items") {
             events.push(CalendarEvent::from_gcal_api(entry, calendar_id.clone()).expect("Unable to convert event into CalendarEvent"));
         }
 
-        while page_token.is_some() {
-            let result = self.hub.events().list(&calendar_id.clone().as_str()).page_token(page_token.as_ref().unwrap().as_str()).doit().await;
+        while let Some(page_token_str) = page_token {
+            let result = if let Some(token) = &self.sync_token {
+                self.hub.events().list(&calendar_id.clone()).sync_token(token.as_str()).page_token(&page_token_str).doit().await
+            }
+            else {
+                self.hub.events().list(&calendar_id.clone()).page_token(&page_token_str).doit().await
+            };
+
             let mut events = Vec::new();
-            let (_, event_list) = result.expect("Invalid event list");
+            (_, event_list) = result.expect("Invalid event list");
             page_token = event_list.next_page_token;
             for entry in event_list.items.expect("Invalid event list items") {
                 events.push(CalendarEvent::from_gcal_api(entry, calendar_id.clone()).expect("Unable to convert event into CalendarEvent"));
             }
         }
+        self.sync_token = event_list.next_sync_token;
         Ok(events)
-    }
-
-    pub async fn get_event_names(&self) -> Option<Vec<String>> {
-        let result = self.hub.events().list("xtremejames1@gmail.com").doit().await;
-        match result {
-            Ok((_, events)) => {
-                if let Some(items) = events.items {
-                    let mut names = Vec::new();
-                    for item in items {
-                        if let Some(title) = item.summary {
-                            names.push(title);
-                        }
-                    }
-                    Some(names)
-                }
-                else {
-                    None
-                }
-            }
-            Err(_) => {
-                None
-            }
-        }
     }
 }

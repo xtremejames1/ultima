@@ -84,7 +84,7 @@ impl GoogleCalendarAPI {
     }
 
     pub async fn get_events(&mut self, calendar: GcalCalendar) -> Result<Vec<CalendarEvent>, ()> {
-        let calendar_id = calendar.id.as_str();
+        let calendar_id = calendar.id;
         let result = if let Some(token) = &self.sync_token {
             self.hub.events().list(&calendar_id.clone()).sync_token(token.as_str()).doit().await
         }

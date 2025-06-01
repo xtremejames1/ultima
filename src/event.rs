@@ -6,6 +6,7 @@ use google_calendar3::api::{CalendarListEntry, Event};
 pub struct GcalCalendar {
     pub id: String,
     pub name: String,
+    pub color: Option<String>,
     pub description: Option<String>,
     pub events: Vec<CalendarEvent>,
     pub access: AccessRole,
@@ -18,6 +19,7 @@ impl GcalCalendar {
     pub fn from_calendar_list_entry(entry: CalendarListEntry) -> Result<Self, ()> {
         let id = entry.id.expect("Calendar ID not provided");
         let name = entry.summary.expect("Calendar name not provided");
+        let color = entry.background_color;
         let description = entry.description;
         let events: Vec<CalendarEvent> = Vec::new();
         let access = match entry.access_role.expect("Calendar Access Role not provided").as_str() {
@@ -33,6 +35,7 @@ impl GcalCalendar {
         Ok(Self {
             id,
             name,
+            color,
             description,
             events,
             access,
@@ -72,7 +75,7 @@ pub struct CalendarEvent {
     pub event_id: String,
     pub calendar_id: String,
     pub source_type: SourceType,
-    pub updated: bool, // Updated locally since last sync
+    pub updated: bool, // Updated locally since last sync, needs to be uploaded to gcal
 }
 
 impl CalendarEvent {
